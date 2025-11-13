@@ -1,0 +1,33 @@
+# Core Data Science & ML
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.5.0
+imbalanced-learn==0.12.3
+scipy==1.13.1
+
+# ML Models
+lightgbm==4.4.0
+xgboost==2.1.0
+
+# Explainability
+shap==0.45.1
+
+# Plotting
+matplotlib==3.9.0
+seaborn==0.13.2
+
+# LLM & Vector DB
+google-generativeai==0.7.1
+sentence-transformers==3.0.1
+faiss-cpu==1.8.0
+
+# Web & Data Retrieval
+requests==2.32.3
+feedparser==6.0.11
+
+# PDF & Document Processing
+PyMuPDF==1.24.6
+pdf2image==1.17.0
+beautifulsoup4==4.12.3
+xhtml2pdf==0.2.8
+Markdown==3.5.2
