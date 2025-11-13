@@ -18,7 +18,7 @@ REPORTS_DIR = os.path.join(BASE_DIR, 'reports')
 
 # --- Data & Model Storage ---
 # The main CSV file containing patient features and labels.
-DATASET_PATH = os.path.join(DATA_DIR, "UCSF+UPENN_all_features.csv") # ⬅️ Make sure this filename is correct
+DATASET_PATH = os.path.join(DATA_DIR, "features.csv") # ⬅️ Make sure this filename is correct
 # Path to save/load the pre-built FAISS index for the literature retriever.
 FAISS_INDEX_PATH = os.path.join(DATA_DIR, 'faiss_literature_index.bin')
 # Path to save/load the processed text from all research papers.
