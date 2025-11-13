@@ -12,6 +12,7 @@ Clinical adoption of machine learning (ML) in medical imaging is limited by the 
 - Paper management:
   - Automatically download papers based on your query in the `config` file.
   - Alternatively, you can manually download papers relevant to your prediction problem.
+  - You can use current context dictionary for Glioma in data folder
 - Inline reporting: Generate clinical interpretation reports directly as PDF.
 
 ---
