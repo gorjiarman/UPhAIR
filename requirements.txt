@@ -29,5 +29,5 @@ feedparser==6.0.11
 PyMuPDF==1.24.6
 pdf2image==1.17.0
 beautifulsoup4==4.12.3
-xhtml2pdf==0.2.8
+xhtml2pdf==0.2.17
 Markdown==3.5.2

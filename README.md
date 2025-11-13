@@ -64,7 +64,7 @@ python main.py
 
 The clinical interpretation report is included here:
 
-<embed src="./reports/clinical_interpretation_report.pdf" type="application/pdf" width="100%" height="800px" />
+![Clinical Interpretation Report Preview](./reports/report_preview.png)
 
 ---
 

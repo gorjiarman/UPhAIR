@@ -19,11 +19,9 @@ class ReportGenerator:
             self.llm_model = genai.GenerativeModel(config.LLM_MODEL_NAME)
             print("Google Generative AI configured successfully.")
         except Exception as e:
-            print(f"❌ Error configuring Google Generative AI: {e}")
+            print(f"Error configuring Google Generative AI: {e}")
             self.llm_model = None
     
-    # 🔹 BLOCK 3: Citation Validation Agent
-
     def validate_report_citations(self, report_text, citation_map):
         """
         Verifies that every [n] in the report matches a retrieved source in citation_map.
@@ -163,7 +161,7 @@ class ReportGenerator:
             print("LLM narrative generated successfully.")
             return response.text
         except Exception as e:
-            print(f"❌ Error during LLM content generation: {e}")
+            print(f"Error during LLM content generation: {e}")
             return f"Error generating report: {e}"
 
     def create_pdf_report(self, sample_info, prediction_info, shap_plot_path, llm_text):
@@ -239,7 +237,7 @@ class ReportGenerator:
         # Generate PDF
         with open(report_path, "wb") as f:
             pisa.CreatePDF(html_template, dest=f)
-        print(f"✅ Report successfully saved to: {report_path}")
+        print(f"Report successfully saved to: {report_path}")
 
         # Optional: Convert PDF to image for display
         try:
@@ -249,4 +247,4 @@ class ReportGenerator:
                 images[0].save(image_path, "PNG")
                 print(f"   Report preview image saved to: {image_path}")
         except Exception as e:
-            print(f"⚠️ Could not create PDF preview image. Poppler might be missing. Error: {e}")
+            print(f"Could not create PDF preview image. Poppler might be missing. Error: {e}")

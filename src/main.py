@@ -51,7 +51,7 @@ def main():
     top_features, shap_plot_path = explainer.explain_sample(data_handler.sample_X)
     
     if top_features is None:
-        print("❌ Could not generate SHAP explanations. Exiting.")
+        print("Could not generate SHAP explanations. Exiting.")
         return
     # 5. Build Retriever and Get Context
     # This step simulates downloading and processing papers.
@@ -78,11 +78,11 @@ def main():
         validation_result = report_generator.validate_report_citations(candidate_report, citation_map)
 
         if validation_result["all_citations_valid"]:
-            print("✅ Citations valid. Report accepted.")
+            print("Citations valid. Report accepted.")
             final_report = candidate_report
             break
         else:
-            print("❌ Invalid citations found:", validation_result["invalid_citations"])
+            print("Invalid citations found:", validation_result["invalid_citations"])
         
     
     report_generator.create_pdf_report(
