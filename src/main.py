@@ -9,8 +9,6 @@ def main():
     """
     Orchestrates the entire UPAIR pipeline.
     """
-    
-    
     # If you want to download and process papers based on the search queery, uncomment below:
     # print("--- Finding And Downloading Related Context ---")
     # paper_retriver = PaperRetriever()

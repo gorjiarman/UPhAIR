@@ -44,6 +44,12 @@ pip install -r requirements.txt
 - **Config file:**  
   Set your query for paper downloads in the `config` file. The system can automatically fetch relevant research papers based on your query.
 
+- **LLM and Unpaywall Config:** 
+  ```
+  Replace these lines in `config` file with your own API key and email address. 
+  GEMINI_API_KEY = "GEMINI_API_KEY"
+  UNPAYWALL_EMAIL = "UNPAYWALL_EMAIL" # Required by the Unpaywall API
+  ```
 ---
 
 ## Running the Project

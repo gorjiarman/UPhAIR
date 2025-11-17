@@ -31,8 +31,8 @@ ALL_TEXTS_PATH = os.path.join(DATA_DIR, 'user_dictionary.txt')
 # ==============================================================================
 # ⚠️ IMPORTANT: Replace placeholders with your actual keys.
 # For better security, consider loading these from environment variables instead of hardcoding them.
-GEMINI_API_KEY = "AIzaSyBMLEwNyxyM6iPEddp9vcv8o9bCRdL3GCc"
-UNPAYWALL_EMAIL = "gorjiarman@gmail.com" # Required by the Unpaywall API
+GEMINI_API_KEY = ""
+UNPAYWALL_EMAIL = "" # Required by the Unpaywall API
 
 
 # ==============================================================================
@@ -43,7 +43,7 @@ LABEL_COLUMN = 'idh'
 PATIENT_ID_COLUMN = 'PatientID'
 # Index of the patient sample to use for generating the report.
 # For example, -1 means the last patient, -2 means the second to last.
-SAMPLE_INDEX = -7
+SAMPLE_INDEX = -6
 
 
 # ==============================================================================
@@ -94,7 +94,7 @@ MAX_PUBMED_RESULTS = 1000 # Max number of paper abstracts to fetch.
 # The pre-trained model used to create vector embeddings for the text.
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2-main/"
 # Number of relevant text chunks to retrieve from the literature for the LLM context.
-RETRIEVER_TOP_K = 5
+RETRIEVER_TOP_K = 10
 MAX_ATTEMPT = 3
 
 
@@ -103,7 +103,7 @@ MAX_ATTEMPT = 3
 # Settings for the final PDF report.
 # ==============================================================================
 # The LLM model to use for generating the clinical narrative.
-LLM_MODEL_NAME = "gemini-2.5-flash"
+LLM_MODEL_NAME = "gemini-2.0-flash"
 # Filename for the SHAP waterfall plot image.
 SHAP_PLOT_FILENAME = "shap_waterfall_plot.png"
 # Final filename for the generated PDF report.

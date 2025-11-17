@@ -50,7 +50,7 @@ class ReportGenerator:
             "unreferenced_sources": unref,
             "citation_lookup": {n: citation_map[n] for n in cited_nums if n in citation_map}
         }
-    # 🔹 BLOCK 2: Prompt Builder Function
+
     def build_llm_prompt(self, retrieved_context, predicted_outcome_0, features_formatted_0):
         """
         Builds the complete instruction prompt for the clinical report generator.
@@ -76,12 +76,15 @@ class ReportGenerator:
         - Explain the model’s prediction based on the given features and their SHAP values.
         - Prioritize features with higher absolute SHAP values (positive or negative).
         - For each key feature:
+            * Use a new paragraph
             * Report its value and SHAP contribution.
             * Provide a clinical or biological interpretation of its role in the model’s decision.
-            * Support relationships between features and outcomes using ONLY the research papers provided above as in-context evidence.
+            * Do not include features that are not explainable.
+            * Support relationships between features and {predicted_outcome_0} using ONLY the research papers provided above as in-context evidence.
         - Cite each reference inline using numbers in square brackets (e.g., [1], [2]).
         - Keep the explanation for each feature under 3 sentences.
         - At the end, include a reference list with:
+        - Do not reference any papers not included in the retrieved context.
             * Title of each cited paper.
             * First author's name.
 
@@ -89,15 +92,20 @@ class ReportGenerator:
         Explanation:
 
         The model predicted this patient to be {predicted_outcome_0}
+        
         Several features influenced this prediction:
 
         =========================
         EXAMPLE 1:
-        **Age (65 years) contributed positively;** IDH-wildtype gliomas are more frequent in older patients [1].
-        **Tumor volume was large (58 cc);** supports a more aggressive tumor subtype [2].
-        **GLCM entropy was high;** indicating structural heterogeneity, common in IDH-wildtype cases [3].
-        **MGMT methylation decreased the score;** as methylation is more associated with IDH-mutant tumors [4].
-        **Tumor location in the frontal lobe also decreased the prediction;** consistent with the IDH-mutant phenotype [5].
+        **Age (65 years) contributed positively;** IDH-wildtype gliomas are more frequent in older patients [1].\n
+
+        **Tumor volume was large (58 cc);** supports a more aggressive tumor subtype [2].\n
+
+        **GLCM entropy was high;** indicating structural heterogeneity, common in IDH-wildtype cases [3].\n
+
+        **MGMT methylation decreased the score;** as methylation is more associated with IDH-mutant tumors [4].\n
+        
+        **Tumor location in the frontal lobe also decreased the prediction;** consistent with the IDH-mutant phenotype [5].\n
 
         References:
         [1] The Relationship Between Age and Glioma Subtypes – Smith
@@ -108,9 +116,11 @@ class ReportGenerator:
         =========================
 
         EXAMPLE 2:
-        **GLSZM ZoneEntropy was low;** lower textural heterogeneity is described in IDH-mutant gliomas [1].
-        **High sphericity of the enhancing lesion;** more regular tumor shape is linked to less infiltrative phenotypes [2].
-        **Lower peritumoral edema volume;** frequently observed in IDH-mutant tumors [3].
+        **GLSZM ZoneEntropy was low;** lower textural heterogeneity is described in IDH-mutant gliomas [1].\n
+
+        **High sphericity of the enhancing lesion;** more regular tumor shape is linked to less infiltrative phenotypes [2].\n
+
+        **Lower peritumoral edema volume;** frequently observed in IDH-mutant tumors [3].\n
 
         References:
         [1] Texture-Based Stratification of Glioma Subtypes – Liu
@@ -118,30 +128,9 @@ class ReportGenerator:
         [3] Edema Patterns and Molecular Class in Glioma – Rossi
         =========================
 
-        EXAMPLE 3:
-        **Patient age (72 years) increased the score;** older age is associated with aggressive glioma biology [1].
-        **Unmethylated MGMT promoter increased the score;** linked to worse predicted outcome [2].
-        **Elevated necrotic core volume;** associated with high-grade aggressive behavior [3].
-
-        References:
-        [1] Age-Related Outcome Patterns in High-Grade Glioma – Zhang
-        [2] MGMT Promoter Status and Glioma Behavior – Ahmed
-        [3] Necrosis Burden and Survival in Glioblastoma – Tanaka
-        =========================
-
-        EXAMPLE 4:
-        **Relatively young age (41 years) decreased the score;** younger patients more often show IDH-mutant profiles [1].
-        **Lower GLRLM LongRunHighGrayLevelEmphasis;** aligns with less aggressive microstructural patterns [2].
-        **High tumor sphericity;** reflects less infiltrative margins in some molecular subtypes [3].
-
-        References:
-        [1] Demographic Correlates of Molecular Glioma Class – Wang
-        [2] Run-Length Radiomics and Glioma Grade Association – Alvarez
-        [3] Shape-Based MRI Biomarkers in Diffuse Glioma – Chen
-        =========================
-
         Now generate the actual report for THIS patient, following the same structure and tone.
         Use only the provided evidence, and do not invent new biological claims.
+
 
         Feature set:
         {features_formatted_0}
@@ -175,7 +164,7 @@ class ReportGenerator:
         try:
             with open(shap_plot_path, "rb") as f:
                 img_base64 = base64.b64encode(f.read()).decode()
-            image_html = f'<img src="data:image/png;base64,{img_base64}" style="width: 100%; max-width: 600px; margin-top: 20px;" >'
+            image_html = f'<img src="data:image/png;base64,{img_base64}" style="width: 50%; max-width: 300px; margin-top: 20px;" >'
         except FileNotFoundError:
             image_html = "<p><strong>Error: SHAP plot image not found.</strong></p>"
         
