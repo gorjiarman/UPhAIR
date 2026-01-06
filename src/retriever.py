@@ -1,47 +1,62 @@
 import os
 import json
-import requests
 import fitz  # PyMuPDF
 import faiss
 import re
-import numpy as np
 from sentence_transformers import SentenceTransformer
 import config
-import glob
 import ast
+from scista import ArticleFetcher
+from paper_downloader import load_json_store
+from collections import defaultdict
+
 class PaperRetriever:
-    """
-    Handles fetching paper metadata from Europe PMC.
-    (Note: Downloading and parsing PDFs is a heavy task and is simplified here)
-    """
+
     def fetch_paper_metadata(self):
-        print("\nFetching paper metadata from Europe PMC...")
-        base_url = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
-        params = {
-            "query": config.PUBMED_QUERY,
-            "format": "json",
-            "pageSize": config.MAX_PUBMED_RESULTS
-        }
-        try:
-            response = requests.get(base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            results = data.get("resultList", {}).get("result", [])
-            
-            papers = {}
-            for paper in results:
-                title = paper.get("title", "").strip()
-                # A simple way to create a filename-safe title
-                filename = "".join([c for c in title if c.isalpha() or c.isdigit() or c.isspace()]).rstrip()
-                if title:
-                    papers[filename] = paper.get("doi", "")
-            
-            print(f"Found metadata for {len(papers)} papers.")
-            return papers
-        except requests.RequestException as e:
-            print(f"❌ Error fetching from Europe PMC: {e}")
-            return {}
+        fetcher = ArticleFetcher(
+            core_api_key=config.CORE_API_KEY,
+            email_for_unpaywall=config.UNPAYWALL_EMAIL
+        )
+
+        articles = fetcher.fetch_articles(
+            topic="glioma radiomics",
+            num_articles=50,
+            sort_by_date=True
+        )
+
+        # Open file once, write incrementally
+        with open("data/paper_titles_and_dois.txt", "w", encoding="utf-8") as f:
+            for idx, article in enumerate(articles, start=1):
+                title = article.title or "N/A"
+                doi = article.doi or "N/A"
+
+                print("Title:", title)
+                print("DOI:", doi)
+                print("Text:", article.text)
+                print("PDF URL:", article.pdf_url)
+
+                # Write to file
+                f.write(f"{idx}. Title: {title}\n")
+                f.write(f"   DOI: {doi}\n\n")
+
+                # Save PDF if available
+                if article.pdf_url:
+                    pdf_name = f"paper_{idx}.pdf"
+                    success = article.save_pdf(pdf_name)
+                    print("PDF saved?", success)
+        
     
+    def extract_text_from_pdf(self, pdf_path):
+        try:
+            doc = fitz.open(pdf_path)
+            full_text = ""
+            for page in doc:
+                full_text += page.get_text()
+            doc.close()
+            return full_text
+        except:
+            return " not find "
+
     def remove_references(self, text):
         # Look for common reference section headers
         patterns = [
@@ -59,77 +74,24 @@ class PaperRetriever:
 
         return text  # return full text if no pattern matches
 
-    def extract_text_from_pdf(self, pdf_path):
-        try:
-            doc = fitz.open(pdf_path)
-            full_text = ""
-            for page in doc:
-                full_text += page.get_text()
-            doc.close()
-            return full_text
-        except:
-            return " not find "
-
-    def download_papers(self, metadatas):
-        """
-        Downloads the PDF from the DOI link and extracts text.
-        Note: This is a simplified placeholder function.
-        """
-        for metadata in metadatas.items():
-            title, doi = metadata
-            print(f"\nProcessing paper: {title}")
-            print(f"Downloading and extracting text for DOI: {doi}")
-            current_files = glob.glob(config.PAPER_DIR)
-            if f"{title}.pdf" in current_files:
-                continue
-
-            unpaywall_url = f"https://api.unpaywall.org/v2/{doi}?email={config.UNPAYWALL_EMAIL}"
-            try:
-                # Step 1: Query Unpaywall for OA PDF
-                res = requests.get(unpaywall_url).json()
-                if res.get("is_oa") and res.get("oa_locations"):
-                    pdf_url = res["oa_locations"][0].get("url_for_pdf")
-                    if pdf_url:
-                        # Step 2: Download the PDF
-                        pdf_response = requests.get(pdf_url)
-                        if pdf_response.status_code == 200:
-                            # Optional: Create output folder
-                            filename = title+".pdf"
-                            filepath = os.path.join(config.PAPER_DIR, filename)
-
-                            with open(filepath, "wb") as f:
-                                f.write(pdf_response.content)
-
-                            print(f"✅ PDF downloaded and saved to: {filepath}")
-                        else:
-                            print("⚠️ Failed to download the PDF (bad response).")
-                    else:
-                        print("⚠️ No direct PDF URL found in the OA record.")
-                else:
-                    print("❌ No open access PDF found for this DOI.")
-            except:
-                print("No DOI")
-    
     def extract_text_and_merge(self):
-
-        all_papers = glob.glob(config.PAPER_DIR+"/*.pdf")
-        # print(all_papers)
-        # Extract text and analyze
+        paper_records = load_json_store(filename=config.PAPER_DIR+"/papers.json")
         all_texts = {}
-        for paper in all_papers:
-            print(paper)
-            pdf_text = self.extract_text_from_pdf(paper)
+        for paper_record in paper_records:
+            fpath = config.PAPER_DIR+"/"+str(paper_record.get("uid"))+"--paper.pdf"
+            print(fpath)
+            pdf_text = self.extract_text_from_pdf(fpath)
             cleaned_text = self.remove_references(pdf_text)
-            all_texts[paper.split("/")[-1].replace(".pdf","")] = cleaned_text
+            all_texts[paper_record.get("title")] = cleaned_text
 
-        with open(config.DATA_DIR+"/new_dictionary.txt", "w") as f:
-            f.write(str(all_texts))
+            with open(config.DATA_DIR+"/new_dictionary.txt", "w") as f:
+                f.write(str(all_texts))
             
-
 class FaissRetriever:
     """
     Builds a FAISS vector store from text and retrieves relevant context.
     """
+
     def __init__(self, model_name=config.EMBEDDING_MODEL_NAME):
         print("Loading sentence transformer model...")
         self.model = SentenceTransformer(model_name)
@@ -137,83 +99,138 @@ class FaissRetriever:
         self.documents = []
         self.doc_ids = []
 
-    def build_index_from_texts(self, paper_texts):
+    def build_index_from_texts(self, feature_name, paper_texts, chunk_size=300, overlap=50):
         """
-        Embeds documents and builds a FAISS index.
+        Build FAISS index from feature-related paper chunks only
         """
-        print("\nBuilding FAISS vector store from paper texts...")
-        
-        for name, content in paper_texts.items():
 
-            self.documents.append(content)
-            self.doc_ids.append(name)
-        
-        print(f"Embedding {len(self.documents)} documents...")
-        embeddings = self.model.encode(self.documents, show_progress_bar=True, convert_to_numpy=True)
-        
+        print("\nBuilding FAISS vector store from feature-related chunks...")
+
+        self.documents = []
+        self.doc_ids = []
+
+        # ---- clean and tokenize feature ----
+        base_feature = (
+            feature_name.split(":")[0]
+            .replace("*", "")
+            .replace("-", "")
+            .replace("_", " ")
+            .strip()
+            .lower()
+        )
+
+        feature_tokens = base_feature.split()
+
+        for paper_id, text in paper_texts.items():
+            if not text:
+                continue
+
+            words = text.split()
+            start = 0
+
+            while start < len(words):
+                end = start + chunk_size
+                chunk = " ".join(words[start:end])
+                chunk_lower = chunk.lower()
+
+                # ---- HARD LEXICAL FILTER (token-based) ----
+                if not any(token in chunk_lower for token in feature_tokens):
+                    start = end - overlap
+                    continue
+
+                self.documents.append(chunk)
+                self.doc_ids.append(paper_id)
+
+                start = end - overlap
+
+        if not self.documents:
+            print("No chunks matched the feature tokens.")
+            return
+
+        print(f"Embedding {len(self.documents)} filtered chunks...")
+
+        embeddings = self.model.encode(
+            self.documents,
+            show_progress_bar=True,
+            convert_to_numpy=True,
+            normalize_embeddings=True
+        )
+
         dimension = embeddings.shape[1]
-        self.index = faiss.IndexFlatL2(dimension)
-        self.index.add(embeddings.astype('float32'))
-        
-        print(f"FAISS index built with {self.index.ntotal} vectors.")
+        self.index = faiss.IndexFlatIP(dimension)
+        self.index.add(embeddings.astype("float32"))
 
-    def retrieve_context(self, features_list, k=config.RETRIEVER_TOP_K):
-        paper_to_chunks = {}
+        print(f"FAISS index built with {self.index.ntotal} chunk vectors.")
 
-        """
-        Retrieves relevant text snippets for a list of feature names.
-        """
+    def get_title_by_uid(self, uid, filename=config.PAPER_DIR + "/papers.json"):
+        with open(filename, "r", encoding="utf-8") as f:
+            papers = json.load(f)
+
+        for paper in papers:
+            if paper.get("uid") == int(uid):
+                return paper.get("title")
+
+    def retrieve_context(self, features, paper_texts, k=50):
         if self.index is None:
             return "Retriever index has not been built."
-            
+
         print("\nQuerying FAISS index for relevant literature context...")
-        
-        # The features from the explainer are formatted with markdown, clean them first
-        clean_features = [f.split(':')[0].replace('*', '').strip() for f in features_list]
-        
-        query_text = ", ".join(clean_features)
-        
-        query_embedding = self.model.encode([query_text])
-        distances, indices = self.index.search(np.array(query_embedding).astype('float32'), k)
+
+        base_feature = (
+            features.split(":")[0]
+            .replace("*", "")
+            .replace("-", "")
+            .replace("_", " ")
+            .strip()
+        )
+
+        query_text = (
+            f"Feature {base_feature} "
+            f"associated with glioma grading, tumor heterogeneity, and prognosis"
+        )
+
+        print("Query text:", query_text)
+
+        query_embedding = self.model.encode(
+            [query_text],
+            convert_to_numpy=True,
+            normalize_embeddings=True
+        )
+
+        distances, indices = self.index.search(
+            query_embedding.astype("float32"),
+            k
+        )
+
+        # ---- aggregate retrieved chunks per paper ----
+        paper_chunk_counts = defaultdict(int)
 
         for idx in indices[0]:
-            paper_id = self.doc_ids[idx+1]
-            chunk_text = self.documents[idx+1]
-            # print(chunk_text)
+            paper_id = self.doc_ids[idx]
+            paper_chunk_counts[paper_id] += 1
 
-            if paper_id not in paper_to_chunks:
-                paper_to_chunks[paper_id] = []
-            paper_to_chunks[paper_id].append(chunk_text)
-            # assign numeric citation IDs
-        
-        unique_papers = list(paper_to_chunks.keys())
-        citation_map = {i + 1: unique_papers[i] for i in range(len(unique_papers))}
+        if not paper_chunk_counts:
+            return None, ""
 
-        # build the retrieved context with labeled evidence
-        evidence_blocks = []
-        for num, paper_id in citation_map.items():
-            for ch in paper_to_chunks[paper_id]:
-                cleaned = re.sub(r"\s+", " ", ch).strip()
-                if cleaned:
-                    evidence_blocks.append(f"[{num}] {cleaned}")
+        # ---- choose paper with most supporting chunks ----
+        best_paper = max(
+            paper_chunk_counts.items(),
+            key=lambda x: x[1]
+        )[0]
 
-        retrieved_context = "\n".join(evidence_blocks)
-        print("[Retrieval] Evidence and citation map prepared.")
+        # ---- retrieve FULL paper text ----
+        full_text = paper_texts.get(best_paper, "")
 
-        return retrieved_context, citation_map
+        if not full_text:
+            print("Warning: full text not found for selected paper.")
+            return best_paper, ""
+        print(
+            f"📑 Selected paper {best_paper} "
+            f"with {paper_chunk_counts[best_paper]} supporting chunks."
+        )
 
-        # retrieved_docs = [self.documents[i] for i in indices[0]]
-        # retrieved_ids = [self.doc_ids[i] for i in indices[0]]
-        
-        # print(f"Retrieved top {k} documents based on features: {retrieved_ids}")
-        
-        # # For simplicity, we concatenate the full text of the top k documents.
-        # # A more advanced approach would be to chunk and retrieve specific sentences.
-        # all_retrieved_text = "\n\n---\n\n".join(retrieved_docs)
-        
-        # return all_retrieved_text
-
-# --- Helper function to simulate text extraction ---
+        return best_paper, full_text
+# --- Helper function to simulate txt extraction ---
 # In a real scenario, this would involve downloading and parsing hundreds of PDFs,
 # which is slow and error-prone. We will simulate by creating a dummy text file.
 def get_paper_texts(force_create=False):
@@ -239,63 +256,3 @@ def get_paper_texts(force_create=False):
             json.dump(dummy_texts, f)
         print(f"Saved dummy paper texts to {config.ALL_TEXTS_PATH}")
         return dummy_texts
-
-def retrieve_top_papers(papers, query_text, model, index, k):
-    """
-    Retrieves top relevant papers for each input feature and
-    builds both:
-      - retrieved_context: text snippets with numeric [n] labels
-      - citation_map: {n: paper_id}, used later to verify citations
-
-    Requires:
-      documents[i]: text chunk i
-      doc_ids[i]: source identifier (filename / DOI / etc.) for chunk i
-    """
-    documents = []
-    doc_ids = []
-    for name, content in papers.items():
-      documents.append(content)
-      doc_ids.append(name)
-
-    if index is None:
-        return "Retriever not built.", {}
-
-    print("\n[Retrieval] Collecting evidence for citation...")
-
-    # collect chunks by paper_id
-    paper_to_chunks = {}
-
-    for raw_feature in query_text.split(","):
-        feature = raw_feature.strip()
-        if not feature:
-            continue
-
-        query_embedding = model.encode([feature])
-        distances, indices = index.search(
-            np.array(query_embedding).astype('float32'), k
-        )
-
-        for idx in indices[0]:
-            paper_id = doc_ids[idx]
-            chunk_text = documents[idx]
-
-            if paper_id not in paper_to_chunks:
-                paper_to_chunks[paper_id] = []
-            paper_to_chunks[paper_id].append(chunk_text)
-
-    # assign numeric citation IDs
-    unique_papers = list(paper_to_chunks.keys())
-    citation_map = {i + 1: unique_papers[i] for i in range(len(unique_papers))}
-
-    # build the retrieved context with labeled evidence
-    evidence_blocks = []
-    for num, paper_id in citation_map.items():
-        for ch in paper_to_chunks[paper_id]:
-            cleaned = re.sub(r"\s+", " ", ch).strip()
-            if cleaned:
-                evidence_blocks.append(f"[{num}] {cleaned}")
-
-    retrieved_context = "\n".join(evidence_blocks)
-    print("[Retrieval] Evidence and citation map prepared.")
-
-    return retrieved_context, citation_map

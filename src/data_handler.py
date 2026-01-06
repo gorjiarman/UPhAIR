@@ -2,6 +2,9 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import os
 import config
+import SimpleITK as sitk
+from radiomics import featureextractor
+import numpy as np
 
 class DataHandler:
     """
@@ -19,7 +22,125 @@ class DataHandler:
         self.sample_X = None
         self.sample_y = None
         self.sample_info = {}
+    
 
+    def load_sample(self):
+        """
+        Extract PyRadiomics features from NIfTI image + mask
+        and return them as:
+            - features_array
+            - feature_names
+            - first_slice_image
+            - middle_slice_image
+            - last_slice_image
+        """
+
+        # Default radiomics parameters
+        default_params = {
+            "binWidth": 25,
+            "label": 1,
+            "interpolator": sitk.sitkBSpline,
+            "correctMask": True
+        }
+
+        # Initialize PyRadiomics extractor
+        extractor = featureextractor.RadiomicsFeatureExtractor()
+        for k, v in default_params.items():
+            extractor.settings[k] = v
+
+        extractor.enableImageTypeByName("Original")
+        extractor.enableAllFeatures()
+
+        # Load image + mask
+        image = sitk.ReadImage("data/sample/UCSF-PDGM-0535_T1.nii.gz")
+        mask = sitk.ReadImage("data/sample/UCSF-PDGM-0535_tumor_segmentation.nii.gz")
+        mask[mask == 2] = 1
+
+        # ----------------------------
+        # Radiomics extraction
+        # ----------------------------
+        result = extractor.execute(image, mask)
+
+        feature_names = []
+        feature_values = []
+
+        for k, v in result.items():
+            if k.startswith("diagnostics_"):
+                continue
+            try:
+                val = float(v)
+                feature_names.append(k)
+                feature_values.append(val)
+            except:
+                pass
+
+        features_array = np.array(feature_values, dtype=float)
+
+        # ----------------------------
+        # Slice extraction + contour overlay
+        # ----------------------------
+
+        # Convert to NumPy
+        img_np = sitk.GetArrayFromImage(image)      # shape: [z, y, x]
+        mask_np = sitk.GetArrayFromImage(mask)
+        mask_np[mask_np == 2] = 1
+
+
+        z = img_np.shape[0]
+
+        # --- Find slices where segmentation exists ---
+        mask_sums = mask_np.reshape(z, -1).sum(axis=1)       # sum of each slice
+        seg_slices = np.where(mask_sums > 0)[0]              # indices with tumor
+
+        if len(seg_slices) == 0:
+            # No segmentation found, fallback to full volume definition
+            first_idx = 0
+            mid_idx = z // 2
+            last_idx = z - 1
+        else:
+            # First, middle, and last slices containing segmentation
+            first_idx = seg_slices[0]
+            last_idx  = seg_slices[-1]
+            mid_idx   = seg_slices[len(seg_slices) // 2]
+
+        slice_indices = [first_idx, mid_idx, last_idx]
+        rendered_slices = []
+
+        for idx in slice_indices:
+            img_slice = img_np[idx]
+            mask_slice = mask_np[idx]
+
+            # Create an RGB image
+            rgb = np.stack([img_slice, img_slice, img_slice], axis=-1)
+            rgb = rgb - rgb.min()
+            if rgb.max() > 0:
+                rgb = rgb / rgb.max()
+            rgb = (rgb * 255).astype(np.uint8)
+
+            # Build contour mask
+            from scipy.ndimage import binary_dilation
+
+            border = mask_slice.astype(bool) ^ binary_dilation(mask_slice.astype(bool))
+            rgb[border] = [255, 0, 0]  # red contour
+
+            rendered_slices.append(rgb)
+
+        first_slice_img, middle_slice_img, last_slice_img = rendered_slices
+        clincal_fs = pd.read_csv("data/sample/UCSF-PDGM-0535-clinical.csv")
+        
+        clinical_arr = np.array(clincal_fs.loc[0, :].values.tolist())
+        features_array = np.append(clinical_arr,features_array)
+
+        clinical_arr_n = np.array(clincal_fs.columns.values.tolist())
+        feature_names = np.append(clinical_arr_n,feature_names)
+
+        return (
+            features_array,
+            feature_names,
+            first_slice_img,
+            middle_slice_img,
+            last_slice_img
+        )
     def load_data(self):
         """Loads the dataset from the CSV file."""
         print(f"Loading data from {self.filepath}...")

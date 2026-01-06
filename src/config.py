@@ -24,16 +24,16 @@ FAISS_INDEX_PATH = os.path.join(DATA_DIR, 'faiss_literature_index.bin')
 # Path to save/load the processed text from all research papers.
 ALL_TEXTS_PATH = os.path.join(DATA_DIR, 'user_dictionary.txt')
 
-
+END_POINT = "https://arvancloudai.ir/gateway/models/Gemini-2.0-Flash-001/TplscXjopRowcXmi2JcnDhcIAVcYOKaMGx8T05Ua2DFzvas8h7_RguYYFVBOErJ_wiIBqncRFVPJ-7M8sBVvo1vpk5I0rAxmlXMSPr1IsK7mWBqdrtoMzmfhVo9GDs1oYR0r2uow8U2JmCpYfWAqDVzG19qJb8wk2_jJ2322cEeibZ071pn0lG-lToWvt11pcIP8zY80QvUHS4xO-5vF04KbfgBxP-g4Qt2u-IPoQcIjmnmJp7QeRejY6BLLldhCOWPVxPjZ41ZzWPVBlkQ/v1"
 # ==============================================================================
 # 🔐 API & SERVICE KEYS
 # For accessing external services like Google Gemini and Unpaywall.
 # ==============================================================================
 # ⚠️ IMPORTANT: Replace placeholders with your actual keys.
 # For better security, consider loading these from environment variables instead of hardcoding them.
-GEMINI_API_KEY = ""
-UNPAYWALL_EMAIL = "" # Required by the Unpaywall API
-
+LLM_API_KEY = "c5db2b56-f432-5b14-85b3-b7908720ecd8"
+UNPAYWALL_EMAIL = "gorji.arman@edu.umsha.ac.ir" # Required by the Unpaywall API
+CORE_API_KEY = "HI8v4MmfnkYiA1RqThr0w2LeOaSEbN3c"
 
 # ==============================================================================
 # 📊 DATASET & SAMPLING CONFIGURATION
@@ -65,24 +65,7 @@ CLASSIFIERS = {
             'clf__max_features': ['sqrt', 'log2']
         }
     ),
-    # You can easily add more models to compare by uncommenting them.
-    # 'RandomForest': (
-    #     RandomForestClassifier(random_state=RANDOM_STATE),
-    #     {
-    #         'clf__n_estimators': [100, 200],
-    #         'clf__max_depth': [10, 20],
-    #         'clf__min_samples_split': [2, 5]
-    #     }
-    # ),
-    # 'SVC': (
-    #     SVC(probability=True, random_state=RANDOM_STATE),
-    #     {
-    #         'clf__C': [0.1, 1, 10],
-    #         'clf__kernel': ['linear', 'rbf']
-    #     }
-    # )
 }
-
 
 # ==============================================================================
 # 🔍 LITERATURE RETRIEVER CONFIGURATION (RAG)
@@ -103,7 +86,7 @@ MAX_ATTEMPT = 3
 # Settings for the final PDF report.
 # ==============================================================================
 # The LLM model to use for generating the clinical narrative.
-LLM_MODEL_NAME = "gemini-2.0-flash"
+LLM_MODEL_NAME = "Gemini-2.0-Flash-001"
 # Filename for the SHAP waterfall plot image.
 SHAP_PLOT_FILENAME = "shap_waterfall_plot.png"
 # Final filename for the generated PDF report.

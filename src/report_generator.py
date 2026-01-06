@@ -7,51 +7,52 @@ from pdf2image import convert_from_path
 import google.generativeai as genai
 import config
 from xhtml2pdf import pisa
-
+import base64
+import io
+from datetime import datetime
+from xhtml2pdf import pisa
+from PIL import Image
+import numpy as np
+import requests
 class ReportGenerator:
     """
     Generates the final PDF report by combining model output, SHAP explanations,
     and LLM-generated text.
     """
-    def __init__(self, api_key):
-        try:
-            genai.configure(api_key=api_key)
-            self.llm_model = genai.GenerativeModel(config.LLM_MODEL_NAME)
-            print("Google Generative AI configured successfully.")
-        except Exception as e:
-            print(f"Error configuring Google Generative AI: {e}")
-            self.llm_model = None
-    
-    def validate_report_citations(self, report_text, citation_map):
-        """
-        Verifies that every [n] in the report matches a retrieved source in citation_map.
+    def __init__(self, api_key, endpoint):
+        self.api_key = api_key
+        self.endpoint = endpoint.rstrip("/") + "/chat/completions"
 
-        Returns:
-            all_citations_valid: bool
-            used_citations: list[int] actually cited
-            invalid_citations: list[int] not present in citation_map
-            unreferenced_sources: list[int] retrieved but not cited
-        """
-        import re
-
-        # find all [n] citations
-        cited_nums = re.findall(r"\[(\d+)\]", report_text)
-        cited_nums = sorted({int(x) for x in cited_nums})
-
-        valid_nums = sorted(citation_map.keys())
-
-        invalid = [n for n in cited_nums if n not in citation_map]
-        unref = [n for n in valid_nums if n not in cited_nums]
-
-        return {
-            "all_citations_valid": (len(invalid) == 0),
-            "used_citations": cited_nums,
-            "invalid_citations": invalid,
-            "unreferenced_sources": unref,
-            "citation_lookup": {n: citation_map[n] for n in cited_nums if n in citation_map}
+        self.headers = {
+            "Authorization": f"apikey {self.api_key}",
+            "Content-Type": "application/json"
         }
 
-    def build_llm_prompt(self, retrieved_context, predicted_outcome_0, features_formatted_0):
+        # Simple connectivity test
+        try:
+            payload = {
+                "model": config.LLM_MODEL_NAME,
+                "messages": [{"role": "user", "content": "test"}],
+                "max_tokens": 1,
+                "temperature": 0.0
+            }
+
+            response = requests.post(
+                self.endpoint,
+                headers=self.headers,
+                json=payload,
+                timeout=10
+            )
+            response.raise_for_status()
+            print("LLM endpoint configured successfully.")
+            print(response)
+            self.available = True
+
+        except Exception as e:
+            print(f"Error configuring LLM endpoint: {e}")
+            self.available = False
+   
+    def build_llm_prompt_assmbly(self, retrieved_context, predicted_outcome_0, features_formatted_0):
         """
         Builds the complete instruction prompt for the clinical report generator.
         Includes examples for:
@@ -61,115 +62,101 @@ class ReportGenerator:
         - Mixed (clinical + radiomic)
         """
         return f"""
-        You are a medical AI assistant trained to generate precise and formal clinical interpretation reports.
-        Your goal is to explain how a machine learning model made a specific prediction for a patient based on their input features.
+        You are a medical AI assistant trained to explain how a machine learning model made a specific prediction for a patient based on the feature.
         Your explanation must be clear and readable for physicians and clinicians, using clinical reasoning supported by relevant literature provided below.
         Do not include any treatment recommendations or management advice (e.g., do not say we should use drug X because of gene Y).
         Only describe the clinical or biological relevance of the feature in relation to the predicted class.
+        strictly follow the structure and tone of the examples provided.
+
+        Your instructions:
+        - Explain the model’s prediction based on the given feature realtive value and their SHAP values.
+        - For each key feature:
+            * when the outcome is IDH-mutant do not explain features with positive shap value
+            * when the outcome is IDH-wildtype do not explain features with negetive shap value
+            * Report its value and SHAP contribution 
+                (SHAP : positive value) --> moved the prediction toward IDH-wildtype
+                (SHAP : negetive value) --> moved the prediction toward IDH-mutant
+            * Max three sentences
+            * Provide a clinical or biological interpretation of its role in the model’s decision.
+            * Do not include features that are not explainable.
+            * [Relative values] indicate how the feature compares to the training cohort:
+                - (Relative Value : 1) : Very Low (below 25th percentile)
+                - (Relative Value : 2) : Low (25th to 50th percentile)
+                - (Relative Value : 3) : High (50th to 75th percentile)
+                - (Relative Value : 4) : Very High (above 75th percentile)
+            * Binary features should be reported as 
+                "1.00" --> "Present" 
+                "0.00" --> "Absent"
+            * Support relationships between features and {predicted_outcome_0} using evidence from below Literature.
+        - All features except clinical features are derived from radiomic analysis of MRI scans.
+        - if an explanation is in contrast with the litrature then return (*) as output
+
+        =========================
+        EXAMPLE 1 where the predicted outcome is IDH-Wildtype, age value is 85, and SHAP value is positive and Relative Value is 4:
+        **Patient age** which is very high (relative value : 4) compared to the training dataset moved the prediction toward IDH-Wildtype; Higher age at diagnosis is consistently observed in gliomas classified as IDH‑wildtype compared with those bearing IDH‑mutation—for example, one large cohort reported median ages of ~60.5 years for IDH-wildtype versus ~38.2 years for IDH-mutant gliomas (p < 0.001).\n
+        EXAMPLE 2 where the predicted outcome is IDH-Mutant, MGMT value is 0.00, and SHAP value is positive and Relative Value is binary:
+        **MGMT methylation** status which is absent moved the prediction toward IDH-Mutant; MGMT promoter methylation often appears as an important predictor of IDH mutation in machine learning models because both reflect the G-CIMP epigenetic phenotype typical of lower-grade gliomas.\n
+        EXAMPLE 3 where the predicted outcome is IDH-Wildtype, First order minimum value is 10, and SHAP value is positive and Relative Value is 1:
+        **First order minimum** which is very low (relative value : 1) compared to the training dataset moved the prediction toward IDH-Wildtype; The first-order minimum in radiomics is the lowest voxel intensity within a tumor ROI, often reflecting necrotic or non-enhancing regions. Lower values are more common in aggressive IDH-wildtype gliomas compared to IDH-mutant tumors.\n
+        EXAMPLE 4 where the predicted outcome is IDH-Mutant, Size Zone Non-Uniformity Normalized is 10 and SHAP value is positive and Relative Value is 1:
+        **Size Zone Non-Uniformity Normalized** which is very low (relative value : 1) compared to the training dataset moved the prediction toward IDH-Mutant; it captures the variability in the sizes of homogeneous intensity zones within a tumor, with lower values reflecting less internal heterogeneity, patterns that are characteristic of IDH-mutant tumors.\n
+        =========================
 
         **Retrieved Evidence from Literature:**
         ---
         {retrieved_context}
         ---
-
-        Your instructions:
-        - Explain the model’s prediction based on the given features and their SHAP values.
-        - Prioritize features with higher absolute SHAP values (positive or negative).
-        - For each key feature:
-            * Use a new paragraph
-            * Report its value and SHAP contribution.
-            * Provide a clinical or biological interpretation of its role in the model’s decision.
-            * Do not include features that are not explainable.
-            * Support relationships between features and {predicted_outcome_0} using ONLY the research papers provided above as in-context evidence.
-        - Cite each reference inline using numbers in square brackets (e.g., [1], [2]).
-        - Keep the explanation for each feature under 3 sentences.
-        - At the end, include a reference list with:
-        - Do not reference any papers not included in the retrieved context.
-            * Title of each cited paper.
-            * First author's name.
-
-        Always include these four lines exactly:
-        Explanation:
-
-        The model predicted this patient to be {predicted_outcome_0}
         
-        Several features influenced this prediction:
-
-        =========================
-        EXAMPLE 1:
-        **Age (65 years) contributed positively;** IDH-wildtype gliomas are more frequent in older patients [1].\n
-
-        **Tumor volume was large (58 cc);** supports a more aggressive tumor subtype [2].\n
-
-        **GLCM entropy was high;** indicating structural heterogeneity, common in IDH-wildtype cases [3].\n
-
-        **MGMT methylation decreased the score;** as methylation is more associated with IDH-mutant tumors [4].\n
-        
-        **Tumor location in the frontal lobe also decreased the prediction;** consistent with the IDH-mutant phenotype [5].\n
-
-        References:
-        [1] The Relationship Between Age and Glioma Subtypes – Smith
-        [2] Imaging Biomarkers of Glioma Aggressiveness – Tanaka
-        [3] Texture Analysis for Glioma Characterization – Alvarez
-        [4] MGMT Methylation and Glioma Molecular Subtypes – Zhang
-        [5] Spatial Distribution of Glioma Types in the Brain – Cho
-        =========================
-
-        EXAMPLE 2:
-        **GLSZM ZoneEntropy was low;** lower textural heterogeneity is described in IDH-mutant gliomas [1].\n
-
-        **High sphericity of the enhancing lesion;** more regular tumor shape is linked to less infiltrative phenotypes [2].\n
-
-        **Lower peritumoral edema volume;** frequently observed in IDH-mutant tumors [3].\n
-
-        References:
-        [1] Texture-Based Stratification of Glioma Subtypes – Liu
-        [2] Morphological Signatures in Lower-Grade Glioma – Patel
-        [3] Edema Patterns and Molecular Class in Glioma – Rossi
-        =========================
-
-        Now generate the actual report for THIS patient, following the same structure and tone.
-        Use only the provided evidence, and do not invent new biological claims.
-
-
         Feature set:
         {features_formatted_0}
-        """
-    
+        """        
+
     def generate_llm_explanation(self, prompt):
-        """
-        Prompts the LLM to generate a clinical interpretation.
-        """
-        if not self.llm_model:
-            return "LLM was not configured due to an API key error."
-
-        print("\nGenerating clinical narrative with the LLM...")
         
-        try:
-            response = self.llm_model.generate_content(prompt)
-            print("LLM narrative generated successfully.")
-            return response.text
-        except Exception as e:
-            print(f"Error during LLM content generation: {e}")
-            return f"Error generating report: {e}"
+        if not self.available:
+            raise RuntimeError("LLM endpoint is not available.")
 
-    def create_pdf_report(self, sample_info, prediction_info, shap_plot_path, llm_text):
+        payload = {
+            "model": config.LLM_MODEL_NAME,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.0
+
+        }
+
+        response = requests.post(
+            self.endpoint,
+            headers=self.headers,
+            json=payload
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+
+    def create_pdf_report(self, sample_info, prediction_info, references, shap_plot_path, llm_text,img_first,img_mid,img_last):
         """
         Compiles all information into an HTML template and converts it to a PDF.
         """
         print("Compiling the final PDF report...")
         report_path = os.path.join(config.REPORTS_DIR, config.REPORT_FILENAME)
 
-        # Encode the SHAP plot image to embed it in the HTML
+        def encode_np_image(np_img):
+            pil = Image.fromarray(np_img)
+            buffer = io.BytesIO()
+            pil.save(buffer, format="PNG")
+            return base64.b64encode(buffer.getvalue()).decode()
+
+        # Encode the 3 slices
+        first_b64 = encode_np_image(img_first)
+        mid_b64   = encode_np_image(img_mid)
+        last_b64  = encode_np_image(img_last)
+        # SHAP image encode
         try:
             with open(shap_plot_path, "rb") as f:
-                img_base64 = base64.b64encode(f.read()).decode()
-            image_html = f'<img src="data:image/png;base64,{img_base64}" style="width: 50%; max-width: 300px; margin-top: 20px;" >'
+                shap_base64 = base64.b64encode(f.read()).decode()
+            shap_html = f'<img src="data:image/png;base64,{shap_base64}" style="width: 120px;height: 120px;object-fit: cover;" >'
         except FileNotFoundError:
-            image_html = "<p><strong>Error: SHAP plot image not found.</strong></p>"
+            shap_html = "<p><strong>Error: SHAP plot image not found.</strong></p>"
         
-        # Convert the LLM's markdown response to HTML
-        report_html = markdown.markdown(llm_text)
+        print(references)
         
         # HTML template
         html_template = f"""
@@ -178,20 +165,23 @@ class ReportGenerator:
         <head>
             <title>Machine Learning Prediction Report</title>
             <style>
+                .llm-text {{font-family: "Inter", "Segoe UI", Arial, sans-serif;font-size: 16px;line-height: 1.6;}}
                 body {{ font-family: sans-serif; margin: 40px; }}
                 h1 {{ color: #333; }}
-                h2 {{ color: #555; border-bottom: 2px solid #f0f0f0; padding-bottom: 5px;}}
+                h2 {{ color: #555; border-bottom: 2px solid #f0f0f0; padding-bottom: 5px; }}
                 table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
                 td {{ padding: 8px; border: 1px solid #ddd; }}
                 .header {{ background-color: #f2f2f2; font-weight: bold; }}
                 .prediction {{ font-size: 24px; color: #d9534f; font-weight: bold; margin-top: 20px; }}
                 .report-content {{ margin-top: 30px; }}
+                .gallery {{display: flex;justify-content: center;align-items: center;gap: 50px;}}
+                .gallery img {{width: 120px;height: 120px;object-fit: cover; /* keeps the crop nice */border-radius: 6px; /* optional */}}
             </style>
         </head>
         <body>
+
             <h1>Machine Learning Prediction Report</h1>
             <h2>Glioma IDH Classification</h2>
-            
             <table>
                 <tr>
                     <td class="header">Patient ID:</td>
@@ -206,19 +196,26 @@ class ReportGenerator:
                     <td>{prediction_info.get('model_name', 'N/A')}</td>
                 </tr>
             </table>
-
             <div class="prediction">
                 Final Prediction: {prediction_info.get('predicted_class', 'N/A')}
             </div>
-
             <div class="report-content">
                 <h2>Clinical Interpretation</h2>
-                {report_html}
-
-                <h2>Prediction Explanation (SHAP Analysis)</h2>
-                <p>The following plot shows the features that contributed most to the model's prediction for this patient. Features pushing the prediction higher (towards IDH-wildtype) are in red, and those pushing it lower (towards IDH-mutant) are in blue.</p>
-                {image_html}
+                <div class="llm-text">
+                    {{ markdown.markdown(llm_text) }}
+                </div>
+                <h2>Prediction Explanation (SHAP Analysis) & Tumor Segmentation Slices</h2>
+                <p>Features pushing the prediction higher (towards IDH-wildtype) are red; lower (towards IDH-mutant) are blue.</p>
+                <div class="gallery">
+                    <img src="data:image/png;base64,{first_b64}">
+                    <img src="data:image/png;base64,{mid_b64}">
+                    <img src="data:image/png;base64,{last_b64}">
+                    <img src="data:image/png;base64,{shap_base64}" style="width: 240px;height: 120px;object-fit: cover;" >
+                </div>
+                <h2>References:</h2>
+                {markdown.markdown(references)}
             </div>
+
         </body>
         </html>
         """
