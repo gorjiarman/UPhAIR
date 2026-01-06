@@ -24,16 +24,16 @@ FAISS_INDEX_PATH = os.path.join(DATA_DIR, 'faiss_literature_index.bin')
 # Path to save/load the processed text from all research papers.
 ALL_TEXTS_PATH = os.path.join(DATA_DIR, 'user_dictionary.txt')
 
-END_POINT = "https://arvancloudai.ir/gateway/models/Gemini-2.0-Flash-001/TplscXjopRowcXmi2JcnDhcIAVcYOKaMGx8T05Ua2DFzvas8h7_RguYYFVBOErJ_wiIBqncRFVPJ-7M8sBVvo1vpk5I0rAxmlXMSPr1IsK7mWBqdrtoMzmfhVo9GDs1oYR0r2uow8U2JmCpYfWAqDVzG19qJb8wk2_jJ2322cEeibZ071pn0lG-lToWvt11pcIP8zY80QvUHS4xO-5vF04KbfgBxP-g4Qt2u-IPoQcIjmnmJp7QeRejY6BLLldhCOWPVxPjZ41ZzWPVBlkQ/v1"
+END_POINT = os.getenv("END_POINT")
 # ==============================================================================
 # 🔐 API & SERVICE KEYS
 # For accessing external services like Google Gemini and Unpaywall.
 # ==============================================================================
 # ⚠️ IMPORTANT: Replace placeholders with your actual keys.
 # For better security, consider loading these from environment variables instead of hardcoding them.
-LLM_API_KEY = "c5db2b56-f432-5b14-85b3-b7908720ecd8"
-UNPAYWALL_EMAIL = "gorji.arman@edu.umsha.ac.ir" # Required by the Unpaywall API
-CORE_API_KEY = "HI8v4MmfnkYiA1RqThr0w2LeOaSEbN3c"
+LLM_API_KEY = os.getenv("LLM_API_KEY")
+UNPAYWALL_EMAIL = os.getenv("UNPAYWALL_EMAIL") # Required by the Unpaywall API
+CORE_API_KEY = os.getenv("CORE_API_KEY")
 
 # ==============================================================================
 # 📊 DATASET & SAMPLING CONFIGURATION

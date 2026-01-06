@@ -44,8 +44,7 @@ class ReportGenerator:
                 timeout=10
             )
             response.raise_for_status()
-            print("LLM endpoint configured successfully.")
-            print(response)
+            print("🔗 LLM endpoint configured successfully.")
             self.available = True
 
         except Exception as e:
@@ -69,6 +68,7 @@ class ReportGenerator:
         strictly follow the structure and tone of the examples provided.
 
         Your instructions:
+        - Dont bring any additional introduction and explanation before **feature**
         - Explain the model’s prediction based on the given feature realtive value and their SHAP values.
         - For each key feature:
             * when the outcome is IDH-mutant do not explain features with positive shap value
@@ -163,25 +163,22 @@ class ReportGenerator:
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Machine Learning Prediction Report</title>
+        <h1 style="text-align: center; font-size: 20px;">Machine Learning Prediction Report</h1>
             <style>
-                .llm-text {{font-family: "Inter", "Segoe UI", Arial, sans-serif;font-size: 16px;line-height: 1.6;}}
-                body {{ font-family: sans-serif; margin: 40px; }}
-                h1 {{ color: #333; }}
-                h2 {{ color: #555; border-bottom: 2px solid #f0f0f0; padding-bottom: 5px; }}
-                table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-                td {{ padding: 8px; border: 1px solid #ddd; }}
+                .llm-text {{font-family: "Inter", "Segoe UI", Arial, sans-serif;font-size: 14px;line-height: 1.6;}}
+                body {{ font-family: sans-serif; padding-bottom: 0px;}}
+                h1 {{ color: #333;  }}
+                h2 {{ color: #ffffff; border-bottom: 4px solid #d9534f; padding-bottom: 5px !important; padding-top: 15px; padding-left: 20px; background-color: #333; font-size: 14px; margin-bottom :0px;}}
+                table {{ width: 200px; margin-bottom: 5px; }}
+                td {{ padding: 4px; border: 2px solid #ddd; }}
                 .header {{ background-color: #f2f2f2; font-weight: bold; }}
-                .prediction {{ font-size: 24px; color: #d9534f; font-weight: bold; margin-top: 20px; }}
+                .prediction {{ font-size: 24px; color: #d9534f; font-weight: bold; margin-top: 20px; margin-bottom: 0px;}}
                 .report-content {{ margin-top: 30px; }}
                 .gallery {{display: flex;justify-content: center;align-items: center;gap: 50px;}}
                 .gallery img {{width: 120px;height: 120px;object-fit: cover; /* keeps the crop nice */border-radius: 6px; /* optional */}}
             </style>
         </head>
         <body>
-
-            <h1>Machine Learning Prediction Report</h1>
-            <h2>Glioma IDH Classification</h2>
             <table>
                 <tr>
                     <td class="header">Patient ID:</td>
@@ -197,22 +194,22 @@ class ReportGenerator:
                 </tr>
             </table>
             <div class="prediction">
-                Final Prediction: {prediction_info.get('predicted_class', 'N/A')}
+                Final Prediction: <i>{prediction_info.get('predicted_class', 'N/A')}</i>
             </div>
             <div class="report-content">
                 <h2>Clinical Interpretation</h2>
                 <div class="llm-text">
-                    {{ markdown.markdown(llm_text) }}
+                    {markdown.markdown(llm_text)}
                 </div>
                 <h2>Prediction Explanation (SHAP Analysis) & Tumor Segmentation Slices</h2>
-                <p>Features pushing the prediction higher (towards IDH-wildtype) are red; lower (towards IDH-mutant) are blue.</p>
                 <div class="gallery">
                     <img src="data:image/png;base64,{first_b64}">
                     <img src="data:image/png;base64,{mid_b64}">
                     <img src="data:image/png;base64,{last_b64}">
                     <img src="data:image/png;base64,{shap_base64}" style="width: 240px;height: 120px;object-fit: cover;" >
                 </div>
-                <h2>References:</h2>
+                <p>Features pushing the prediction higher (towards IDH-wildtype) are red; lower (towards IDH-mutant) are blue.</p>
+                <h2>References</h2>
                 {markdown.markdown(references)}
             </div>
 
@@ -229,7 +226,7 @@ class ReportGenerator:
         try:
             images = convert_from_path(report_path, dpi=150)
             if images:
-                image_path = os.path.join(config.REPORTS_DIR, "report_preview.png")
+                image_path = os.path.join(config.REPORTS_DIR, "report_preview_wt.png")
                 images[0].save(image_path, "PNG")
                 print(f"   Report preview image saved to: {image_path}")
         except Exception as e:

@@ -6,7 +6,7 @@ from retriever import FaissRetriever, get_paper_texts,PaperRetriever
 from report_generator import ReportGenerator
 from paper_downloader import MultiSourcePaperFetcher
 import pandas as pd
-
+import os
 def main():
     """
     Orchestrates the entire UPAIR pipeline.
@@ -22,7 +22,7 @@ def main():
     # paper_retriver.extract_text_and_merge()
     
     print("--- Starting UPAIR Pipeline ---")
-
+    
     # 1. Load and Prepare Data
     data_handler = DataHandler()
     features_array,feature_names,first_slice_img,middle_slice_img,last_slice_img = data_handler.load_sample()
@@ -104,7 +104,24 @@ def main():
     refstr = ""
     for refrence in references:
         refstr=refstr+refrence+"\n"
-    
+    """
+    features_int_string = "**Patient age** which is very high (relative value : 4) compared to the training dataset moved the prediction toward IDH-Wildtype; Higher age at diagnosis is consistently observed in gliomas classified as IDH‑wildtype compared with those bearing IDH‑mutation—for example, one large cohort reported median ages of ~60.5 years for IDH-wildtype versus ~38.2 years for IDH-mutant gliomas (p < 0.001).<br><br>"\
+            "**MGMT methylation** status which is absent moved the prediction toward IDH-Mutant; MGMT promoter methylation often appears as an important predictor of IDH mutation in machine learning models because both reflect the G-CIMP epigenetic phenotype typical of lower-grade gliomas.<br><br>"\
+            "**Original GLZSM Zone Entropy** which is very low (relative value : 1) compared to the training dataset moved the prediction toward IDH-Mutant; Lower values reflect less complexity in the distribution of zone sizes, which is associated with IDH-mutant tumors.<br><br>"\
+            "**original_glrlm_RunLengthNonUniformity** which is very low (relative value : 1) compared to the training dataset moved the prediction toward IDH-Mutant; Run Length Non-Uniformity measures the variability of run lengths within an image, with lower values indicating more uniform run lengths, a pattern that is characteristic of IDH-mutant tumors."
+    report_generator = ReportGenerator(api_key=config.LLM_API_KEY, endpoint=config.END_POINT)
+    data_handler = DataHandler()
+    data_handler.load_data()
+    data_handler.prepare_and_split_data()
+    features_array,feature_names,first_slice_img,middle_slice_img,last_slice_img = data_handler.load_sample()
+    prediction_info = {
+        'model_name': "Gradient Boosting Classifier",
+        'predicted_class': "IDH-mutant",
+        'raw_prediction': 0
+    }
+    shap_plot_path = "/Users/arman/Documents/Projects/UPhAIR/UPhAIR/reports/shap_waterfall_plot.png"
+    refstr = "Characteristics and prognostic factors of age-stratified high-grade intracranial glioma patients: A population-based analysis.<br> Extent and prognostic value of MGMT promotor methylation in glioma WHO grade II.<br>Multiparametric MR radiomics in brain glioma: models comparation to predict biomarker status.<br>Behavior-Oriented Nomogram for the Stratification of Lower-Grade Gliomas to Improve Individualized Treatment.<br>Molecular heterogeneity in glioblastoma: potential clinical implications."
+    """
     report_generator.create_pdf_report(
         sample_info=data_handler.sample_info,
         prediction_info=prediction_info,

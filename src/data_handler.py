@@ -52,8 +52,8 @@ class DataHandler:
         extractor.enableAllFeatures()
 
         # Load image + mask
-        image = sitk.ReadImage("data/sample/UCSF-PDGM-0535_T1.nii.gz")
-        mask = sitk.ReadImage("data/sample/UCSF-PDGM-0535_tumor_segmentation.nii.gz")
+        image = sitk.ReadImage("data/sample/UCSF-PDGM-0540_T1.nii.gz")
+        mask = sitk.ReadImage("data/sample/UCSF-PDGM-0540_tumor_segmentation.nii.gz")
         mask[mask == 2] = 1
 
         # ----------------------------
@@ -126,7 +126,7 @@ class DataHandler:
             rendered_slices.append(rgb)
 
         first_slice_img, middle_slice_img, last_slice_img = rendered_slices
-        clincal_fs = pd.read_csv("data/sample/UCSF-PDGM-0535-clinical.csv")
+        clincal_fs = pd.read_csv("data/sample/UCSF-PDGM-0540-clinical.csv")
         
         clinical_arr = np.array(clincal_fs.loc[0, :].values.tolist())
         features_array = np.append(clinical_arr,features_array)
